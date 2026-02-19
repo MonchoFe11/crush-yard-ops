@@ -1,26 +1,337 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* ============================================
+     CRUSH YARD DESIGN SYSTEM — Dark Ops Theme
+     ============================================ */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Backgrounds */
+  --bg-primary: #1A1D23;
+  --bg-secondary: #22262E;
+  --bg-tertiary: #2A2F3A;
+  --bg-hover: #2E333D;
+  --bg-input: #2E333D;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Text */
+  --text-primary: #F0F2F5;
+  --text-secondary: #A8B0BC;
+  --text-muted: #6B7280;
+  --text-on-primary: #FFFFFF;
+
+  /* Brand / Source Colors */
+  --color-primary: #4D7790;
+  --color-primary-hover: #3f6275;
+  --color-primary-active: #355564;
+  --color-secondary: #72A19A;
+  --color-sling: #D1B248;
+  --color-asana: #8B7EC8;
+
+  /* Status Colors */
+  --color-success: #4C804A;
+  --color-warning: #D1B248;
+  --color-error: #B02A20;
+  --color-conflict: #C0392B;
+
+  /* Calendar Event Colors */
+  --event-tripleseat-bg: rgba(77, 119, 144, 0.15);
+  --event-tripleseat-border: #4D7790;
+  --event-courtreserve-bg: rgba(114, 161, 154, 0.15);
+  --event-courtreserve-border: #72A19A;
+  --event-lead-bg: rgba(77, 119, 144, 0.06);
+  --event-lead-border: #4D7790;
+  --event-conflict-accent: #C0392B;
+
+  /* Borders */
+  --border-light: #2E333D;
+  --border-medium: #3A404D;
+  --border-dark: #4A5060;
+
+  /* Court row alternating */
+  --row-even-bg: rgba(255, 255, 255, 0.02);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Firefox scrollbar parity */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-dark) var(--bg-primary);
+}
+
+/* Accessibility: Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Global transitions */
+button,
+a,
+[role="button"],
+input,
+select,
+textarea {
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+@layer components {
+
+  /* ── Buttons ── */
+  .btn-primary {
+    @apply px-4 py-2.5 rounded-lg font-semibold;
+    background-color: var(--color-primary);
+    color: var(--text-on-primary);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--color-primary-hover);
+  }
+
+  .btn-primary:active:not(:disabled) {
+    background-color: var(--color-primary-active);
+    transform: scale(0.98);
+  }
+
+  .btn-primary:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2.5 border rounded-lg font-medium;
+    border-color: var(--border-medium);
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--bg-hover);
+    border-color: var(--border-dark);
+  }
+
+  .btn-secondary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .btn-secondary:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .btn-tertiary {
+    @apply px-3 py-1.5 font-medium rounded-md;
+    color: var(--text-secondary);
+  }
+
+  .btn-tertiary:hover:not(:disabled) {
+    color: var(--color-primary);
+    background-color: rgba(77, 119, 144, 0.12);
+  }
+
+  .btn-tertiary:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /* ── Filter chips ── */
+  .filter-chip {
+    @apply px-3 py-1 rounded-full text-sm font-medium border transition-colors;
+    border-color: var(--border-medium);
+    color: var(--text-secondary);
+    background-color: var(--bg-tertiary);
+  }
+
+  .filter-chip:hover {
+    border-color: var(--color-primary);
+    color: var(--text-primary);
+  }
+
+  .filter-chip.active {
+    background-color: rgba(77, 119, 144, 0.2);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  /* ── Calendar event blocks ── */
+  .event-block {
+    @apply rounded px-2 py-1 overflow-hidden border-l-2 cursor-pointer;
+    transition: filter 150ms ease;
+  }
+
+  .event-block:hover {
+    filter: brightness(1.12);
+  }
+
+  .event-block.tripleseat {
+    background-color: var(--event-tripleseat-bg);
+    border-left-color: var(--event-tripleseat-border);
+    color: var(--text-primary);
+  }
+
+  .event-block.courtreserve {
+    background-color: var(--event-courtreserve-bg);
+    border-left-color: var(--event-courtreserve-border);
+    color: var(--text-primary);
+  }
+
+  .event-block.lead {
+    background-color: var(--event-lead-bg);
+    border-left-color: var(--event-lead-border);
+    border-left-style: dashed;
+    opacity: 0.8;
+    color: var(--text-secondary);
+  }
+
+  .event-block.tentative {
+    border-left-style: dashed;
+    opacity: 0.75;
+  }
+
+  .event-block.has-conflict {
+    border-left-color: var(--event-conflict-accent);
+    box-shadow: inset 3px 0 0 var(--event-conflict-accent);
+  }
+
+  /* ── Event block typography ── */
+  .event-title {
+    @apply font-semibold leading-tight;
+    font-size: 11px;
+  }
+
+  .event-meta {
+    font-size: 10px;
+    opacity: 0.8;
+  }
+
+  /* ── Status badges ── */
+  .badge-definite {
+    @apply px-2 py-0.5 rounded-full text-xs font-medium;
+    background-color: rgba(76, 128, 74, 0.2);
+    color: #4C804A;
+  }
+
+  .badge-tentative {
+    @apply px-2 py-0.5 rounded-full text-xs font-medium;
+    background-color: rgba(209, 178, 72, 0.2);
+    color: #D1B248;
+  }
+
+  .badge-prospect {
+    @apply px-2 py-0.5 rounded-full text-xs font-medium;
+    background-color: rgba(77, 119, 144, 0.2);
+    color: #4D7790;
+  }
+
+  /* ── Calendar grid ── */
+  .calendar-grid-line {
+    border-color: var(--border-light);
+    opacity: 0.4;
+  }
+
+  /* ── Focus ring utility ── */
+  .focus-ring {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* ── Accessibility focus ── */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Webkit scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-dark);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ── Line clamp ── */
+.line-clamp-1 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* ── Slide-over animation ── */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);   opacity: 1; }
+}
+
+@keyframes slideOutRight {
+  from { transform: translateX(0);   opacity: 1; }
+  to   { transform: translateX(100%); opacity: 0; }
+}
+
+.slide-over-enter {
+  animation: slideInRight 0.15s ease-out;
+}
+
+.slide-over-exit {
+  animation: slideOutRight 0.15s ease-in forwards;
+}
+
+/* ── Skeleton loading ── */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.8; }
+}
+
+.skeleton {
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+/* ── Fade in ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* ── Prevent scroll when panel open ── */
+body.panel-open {
+  overflow: hidden;
 }
