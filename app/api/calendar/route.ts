@@ -1,14 +1,4 @@
 // app/api/calendar/route.ts
-// Route Handler: fetches calendar data from Supabase and returns
-// normalized CalendarEvent objects ready for the grid to render.
-//
-// Query params:
-//   date     — YYYY-MM-DD anchor date (required)
-//   mode     — "day" | "week" | "agenda" (default: "day")
-//   location — location code e.g. "ORL" | "NSH" (default: "ORL")
-//
-// Example: GET /api/calendar?date=2026-02-21&mode=day&location=ORL
-
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { buildCalendarEvents } from '@/lib/utils/calendar-transforms';
@@ -21,28 +11,17 @@ import type {
   TSLead,
 } from '@/lib/types/calendar';
 
-// ── Location registry ─────────────────────────────────────────────
-// Add new venues here as they open. UUIDs from the locations table.
-
 const LOCATION_UUIDS: Record<string, string> = {
   ORL: 'ff344bbf-3e47-43b8-b3f7-49d38583970d',
-  // NSH: 'uuid-here-when-nashville-opens',
 };
 
 const DEFAULT_LOCATION = 'ORL';
-
-// ── Date range helpers ────────────────────────────────────────────
 
 function getVisibleDates(anchor: string, mode: CalendarViewMode): string[] {
   if (mode === 'day' || mode === 'agenda') return [anchor];
 
   const dates: string[] = [];
-
-  // Force UTC to prevent Vercel server-timezone date shifting.
-  // new Date('2026-02-21T00:00:00Z') is always Feb 21 regardless of region.
   const start = new Date(anchor + 'T00:00:00Z');
-
-  // Week starts Monday
   const dow = start.getUTCDay();
   const mondayOffset = dow === 0 ? -6 : 1 - dow;
   start.setUTCDate(start.getUTCDate() + mondayOffset);
@@ -52,11 +31,8 @@ function getVisibleDates(anchor: string, mode: CalendarViewMode): string[] {
     d.setUTCDate(d.getUTCDate() + i);
     dates.push(d.toISOString().split('T')[0]);
   }
-
   return dates;
 }
-
-// ── Route Handler ─────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -64,7 +40,6 @@ export async function GET(req: NextRequest) {
   const mode = (searchParams.get('mode') ?? 'day') as CalendarViewMode;
   const locationCode = (searchParams.get('location') ?? DEFAULT_LOCATION).toUpperCase();
 
-  // Validate date param
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json(
       { error: 'Missing or invalid date param. Expected YYYY-MM-DD.' },
@@ -72,7 +47,6 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Validate location param
   const locationUUID = LOCATION_UUIDS[locationCode];
   if (!locationUUID) {
     return NextResponse.json(
@@ -87,12 +61,9 @@ export async function GET(req: NextRequest) {
 
   const supabase = createAdminClient();
 
-  // ── Parallel Supabase queries ─────────────────────────────────
-  // All queries scoped to locationUUID — prevents data bleed across venues.
-
   const [courtMappingsResult, crResult, tsEventsResult, tsLeadsResult] =
     await Promise.all([
-        supabase
+      supabase
         .from('court_mappings')
         .select('id, location_id, court_number, court_name, courtreserve_court_id, tripleseat_room_id, is_active')
         .eq('location_id', locationUUID)
@@ -121,8 +92,6 @@ export async function GET(req: NextRequest) {
         .lte('desired_date', toDate),
     ]);
 
-  // ── Error handling ────────────────────────────────────────────
-
   if (courtMappingsResult.error) {
     console.error('[calendar/route] court_mappings error:', courtMappingsResult.error.message);
     return NextResponse.json({ error: 'Failed to load courts' }, { status: 500 });
@@ -140,8 +109,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to load Tripleseat leads' }, { status: 500 });
   }
 
-  // ── Build normalized events ───────────────────────────────────
-
   const courtMappings = courtMappingsResult.data as CourtMapping[];
   const crReservations = crResult.data as CRReservation[];
   const tsEvents = tsEventsResult.data as TSEvent[];
@@ -153,15 +120,7 @@ export async function GET(req: NextRequest) {
     courtIds: [],
   };
 
-  const events = buildCalendarEvents(
-    crReservations,
-    tsEvents,
-    tsLeads,
-    courtMappings,
-    filters
-  );
-
-  // ── Response ──────────────────────────────────────────────────
+  const events = buildCalendarEvents(crReservations, tsEvents, tsLeads, courtMappings, filters);
 
   return NextResponse.json({
     dates: visibleDates,
