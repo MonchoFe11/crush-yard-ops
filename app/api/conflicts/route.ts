@@ -17,6 +17,7 @@ import type {
   CalendarFilters,
   CourtMapping,
   CRReservation,
+  CREvent,
   TSEvent,
   TSLead,
 } from '@/lib/types/calendar';
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
 
   const supabase = createAdminClient();
 
-  const [courtMappingsResult, crResult, tsEventsResult, tsLeadsResult] =
+  const [courtMappingsResult, crResult, crEventsResult, tsEventsResult, tsLeadsResult] =
     await Promise.all([
       supabase
         .from('court_mappings')
@@ -70,6 +71,14 @@ export async function GET(req: NextRequest) {
         .eq('location_id', locationUUID)
         .gte('reservation_date', today)
         .lte('reservation_date', toDate),
+
+      supabase
+        .from('cr_events')
+        .select('id, location_id, courtreserve_event_id, courtreserve_reservation_id, event_name, event_category_id, event_category_name, start_datetime, end_datetime, court_ids, court_mapping_ids, max_registrants, registered_count, waitlist_count, is_canceled, is_public, public_event_url')
+        .eq('location_id', locationUUID)
+        .gte('start_datetime', `${today}T00:00:00`)
+        .lte('start_datetime', `${toDate}T23:59:59`)
+        .eq('is_canceled', false),
 
       supabase
         .from('ts_events')
@@ -94,6 +103,10 @@ export async function GET(req: NextRequest) {
     console.error('[conflicts/route] cr_reservations error:', crResult.error.message);
     return NextResponse.json({ error: 'Failed to load CourtReserve data' }, { status: 500 });
   }
+  if (crEventsResult.error) {
+    console.error('[conflicts/route] cr_events error:', crEventsResult.error.message);
+    return NextResponse.json({ error: 'Failed to load CourtReserve events' }, { status: 500 });
+  }
   if (tsEventsResult.error) {
     console.error('[conflicts/route] ts_events error:', tsEventsResult.error.message);
     return NextResponse.json({ error: 'Failed to load Tripleseat events' }, { status: 500 });
@@ -104,13 +117,14 @@ export async function GET(req: NextRequest) {
   }
 
   const filters: CalendarFilters = {
-    sources: ['courtreserve', 'tripleseat_event', 'tripleseat_lead'],
+    sources: ['courtreserve', 'courtreserve_event', 'tripleseat_event', 'tripleseat_lead'],
     statuses: ['confirmed', 'tentative', 'prospect'],
     courtIds: [],
   };
 
   const allEvents = buildCalendarEvents(
     crResult.data as CRReservation[],
+    crEventsResult.data as CREvent[],
     tsEventsResult.data as TSEvent[],
     tsLeadsResult.data as TSLead[],
     courtMappingsResult.data as CourtMapping[],

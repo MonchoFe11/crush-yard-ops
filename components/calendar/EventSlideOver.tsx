@@ -30,8 +30,9 @@ function formatDate(dateStr: string): string {
 
 function sourceLabel(event: CalendarEvent): string {
   switch (event.source) {
-    case 'courtreserve':     return 'CourtReserve';
-    case 'tripleseat_event': return 'Tripleseat Event';
+    case 'courtreserve':       return 'CourtReserve';
+    case 'courtreserve_event': return 'CourtReserve Event';
+    case 'tripleseat_event':   return 'Tripleseat Event';
     case 'tripleseat_lead':  return 'Tripleseat Lead';
   }
 }

@@ -83,7 +83,7 @@ function parseCourtNumber(courtsString) {
   return match ? parseInt(match[1], 10) : null;
 }
 
-// ── CourtReserve ───────────────────────────────────────────────────
+// ── CourtReserve Reservations ──────────────────────────────────────
 
 async function pullCourtReserve(locationUUID, courtMappings) {
   console.log('\n── CourtReserve Reservations ──');
@@ -190,6 +190,144 @@ async function pullCourtReserve(locationUUID, courtMappings) {
   console.log(`  Total inserted: ${totalInserted} | Duration: ${duration}ms`);
 }
 
+// ── CourtReserve Events (leagues, clinics, open play, round robins) ─
+
+async function pullCourtReserveEvents(locationUUID, courtMappings) {
+  console.log('\n── CourtReserve Events (eventcalendar) ──');
+  const crAuth = Buffer.from(`${CR_USERNAME}:${CR_PASSWORD}`).toString('base64');
+  const start = Date.now();
+  let totalInserted = 0;
+
+  // Build CR court ID -> mapping lookup
+  const crCourtIdToMapping = {};
+  for (const m of courtMappings) {
+    if (m.courtreserve_court_id) {
+      crCourtIdToMapping[String(m.courtreserve_court_id)] = m;
+    }
+  }
+
+  // 30-day chunks
+  const chunks = [];
+  let chunkStart = new Date(FROM_DATE);
+  while (chunkStart < TO_DATE) {
+    const chunkEnd = new Date(chunkStart);
+    chunkEnd.setDate(chunkEnd.getDate() + 30);
+    if (chunkEnd > TO_DATE) chunkEnd.setTime(TO_DATE.getTime());
+    chunks.push({ from: new Date(chunkStart), to: new Date(chunkEnd) });
+    chunkStart.setDate(chunkStart.getDate() + 30);
+  }
+
+  console.log(`  Fetching ${chunks.length} chunks`);
+
+  for (const chunk of chunks) {
+    const params = new URLSearchParams({
+      startDate: chunk.from.toISOString(),
+      endDate: chunk.to.toISOString(),
+      status: 'Active',
+    });
+
+    const url = `https://api.courtreserve.com/api/v1/eventcalendar/eventlist?${params}`;
+
+    let res;
+    try {
+      res = await fetch(url, {
+        headers: {
+          Authorization: `Basic ${crAuth}`,
+          'X-Org-Id': String(CR_ORG_ID),
+        },
+      });
+    } catch (fetchErr) {
+      console.error(`  Chunk ${toISO(chunk.from)} network error:`, fetchErr.message);
+      await logSync('courtreserve_events', 'read', url, 0, 'error', fetchErr.message);
+      continue;
+    }
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`  Chunk ${toISO(chunk.from)} HTTP ${res.status}: ${body.slice(0, 200)}`);
+      await logSync('courtreserve_events', 'read', url, 0, 'error', `HTTP ${res.status}`);
+      continue;
+    }
+
+    const json = await res.json();
+    const events = json.Data ?? [];
+
+    if (!Array.isArray(events) || events.length === 0) {
+      console.log(`  ${toISO(chunk.from)}: 0 events`);
+      continue;
+    }
+
+    // Deduplicate within chunk by eventId + startDateTime
+    // Recurring events share EventId but differ by StartDateTime + ReservationId
+    const seen = new Set();
+    const dedupedEvents = [];
+    for (const e of events) {
+      const key = `${e.EventId}__${e.StartDateTime}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        dedupedEvents.push(e);
+      }
+    }
+
+    const dupeCount = events.length - dedupedEvents.length;
+    if (dupeCount > 0) {
+      console.log(`  ${toISO(chunk.from)}: removed ${dupeCount} duplicate occurrences`);
+    }
+
+    const rows = dedupedEvents.map(e => {
+      const crCourtIds = (e.Courts ?? []).map(c => c.Id);
+      const courtMappingIds = crCourtIds
+        .map(id => crCourtIdToMapping[String(id)]?.id)
+        .filter(Boolean);
+
+      const unmapped = crCourtIds.length - courtMappingIds.length;
+      if (unmapped > 0) {
+        console.log(`  ⚠ Event ${e.EventId} "${e.EventName}": ${unmapped} court(s) not mapped`);
+      }
+
+      return {
+        location_id: locationUUID,
+        courtreserve_event_id: e.EventId,
+        courtreserve_reservation_id: e.ReservationId ?? null,
+        event_name: e.EventName ?? null,
+        event_category_id: e.EventCategoryId ?? null,
+        event_category_name: e.EventCategoryName ?? null,
+        start_datetime: e.StartDateTime ?? null,
+        end_datetime: e.EndDateTime ?? null,
+        court_ids: crCourtIds,
+        court_mapping_ids: courtMappingIds,
+        max_registrants: e.MaxRegistrants ?? null,
+        registered_count: e.RegisteredCount ?? null,
+        waitlist_count: e.WaitlistCount ?? null,
+        is_canceled: e.IsCanceled ?? false,
+        is_public: e.IsPublicBookingAllowed ?? false,
+        public_event_url: e.PublicEventUrl ?? null,
+        raw_json: e,
+        synced_at: new Date().toISOString(),
+      };
+    });
+
+    const { error } = await supabase
+      .from('cr_events')
+      .upsert(rows, { 
+        onConflict: 'location_id,courtreserve_event_id,start_datetime' 
+      });
+
+    if (error) {
+      console.error(`  Chunk ${toISO(chunk.from)} upsert error:`, error.message);
+    } else {
+      totalInserted += rows.length;
+      console.log(`  ${toISO(chunk.from)} -> ${toISO(chunk.to)}: ${rows.length} events upserted`);
+    }
+
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  const duration = Date.now() - start;
+  await logSync('courtreserve_events', 'read', '/api/v1/eventcalendar/eventlist', totalInserted, 'success', null, duration);
+  console.log(`  Total inserted: ${totalInserted} | Duration: ${duration}ms`);
+}
+
 // ── Tripleseat Events ──────────────────────────────────────────────
 
 async function pullTripleseatEvents(locationUUID, courtMappings) {
@@ -198,7 +336,6 @@ async function pullTripleseatEvents(locationUUID, courtMappings) {
   let totalInserted = 0;
   let page = 1;
 
-  // Build room_id -> court_mapping map for Orlando
   const roomToMapping = {};
   for (const m of courtMappings) {
     if (m.tripleseat_room_id) roomToMapping[m.tripleseat_room_id] = m;
@@ -235,7 +372,6 @@ async function pullTripleseatEvents(locationUUID, courtMappings) {
 
     const rows = events.map(e => {
       const roomIds = (e.rooms ?? []).map(r => r.id);
-    
       return {
         location_id: locationUUID,
         tripleseat_event_id: String(e.id),
@@ -367,6 +503,7 @@ async function main() {
   console.log(`Court mappings loaded: ${courtMappings.length} courts`);
 
   await pullCourtReserve(locationUUID, courtMappings);
+  await pullCourtReserveEvents(locationUUID, courtMappings);
   await pullTripleseatEvents(locationUUID, courtMappings);
   await pullTripleseatLeads(locationUUID);
 

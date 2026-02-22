@@ -7,6 +7,7 @@ import type {
   CalendarViewMode,
   CourtMapping,
   CRReservation,
+  CREvent,
   TSEvent,
   TSLead,
 } from '@/lib/types/calendar';
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest) {
 
   const supabase = createAdminClient();
 
-  const [courtMappingsResult, crResult, tsEventsResult, tsLeadsResult] =
+  const [courtMappingsResult, crResult, crEventsResult, tsEventsResult, tsLeadsResult] =
     await Promise.all([
       supabase
         .from('court_mappings')
@@ -78,6 +79,14 @@ export async function GET(req: NextRequest) {
         .lte('reservation_date', toDate),
 
       supabase
+        .from('cr_events')
+        .select('id, location_id, courtreserve_event_id, courtreserve_reservation_id, event_name, event_category_id, event_category_name, start_datetime, end_datetime, court_ids, court_mapping_ids, max_registrants, registered_count, waitlist_count, is_canceled, is_public, public_event_url')
+        .eq('location_id', locationUUID)
+        .gte('start_datetime', `${fromDate}T00:00:00`)
+        .lte('start_datetime', `${toDate}T23:59:59`)
+        .eq('is_canceled', false),
+
+      supabase
         .from('ts_events')
         .select('id, location_id, tripleseat_event_id, event_name, event_type, status, contact_name, contact_email, event_date, event_start, event_end, guest_count, room_ids')
         .eq('location_id', locationUUID)
@@ -92,35 +101,47 @@ export async function GET(req: NextRequest) {
         .lte('desired_date', toDate),
     ]);
 
-  if (courtMappingsResult.error) {
-    console.error('[calendar/route] court_mappings error:', courtMappingsResult.error.message);
-    return NextResponse.json({ error: 'Failed to load courts' }, { status: 500 });
-  }
-  if (crResult.error) {
-    console.error('[calendar/route] cr_reservations error:', crResult.error.message);
-    return NextResponse.json({ error: 'Failed to load CourtReserve data' }, { status: 500 });
-  }
-  if (tsEventsResult.error) {
-    console.error('[calendar/route] ts_events error:', tsEventsResult.error.message);
-    return NextResponse.json({ error: 'Failed to load Tripleseat events' }, { status: 500 });
-  }
-  if (tsLeadsResult.error) {
-    console.error('[calendar/route] ts_leads error:', tsLeadsResult.error.message);
-    return NextResponse.json({ error: 'Failed to load Tripleseat leads' }, { status: 500 });
-  }
-
-  const courtMappings = courtMappingsResult.data as CourtMapping[];
-  const crReservations = crResult.data as CRReservation[];
-  const tsEvents = tsEventsResult.data as TSEvent[];
-  const tsLeads = tsLeadsResult.data as TSLead[];
-
-  const filters: CalendarFilters = {
-    sources: ['courtreserve', 'tripleseat_event', 'tripleseat_lead'],
-    statuses: ['confirmed', 'tentative', 'prospect'],
-    courtIds: [],
-  };
-
-  const events = buildCalendarEvents(crReservations, tsEvents, tsLeads, courtMappings, filters);
+    if (courtMappingsResult.error) {
+      console.error('[calendar/route] court_mappings error:', courtMappingsResult.error.message);
+      return NextResponse.json({ error: 'Failed to load courts' }, { status: 500 });
+    }
+    if (crResult.error) {
+      console.error('[calendar/route] cr_reservations error:', crResult.error.message);
+      return NextResponse.json({ error: 'Failed to load CourtReserve data' }, { status: 500 });
+    }
+    if (crEventsResult.error) {
+      console.error('[calendar/route] cr_events error:', crEventsResult.error.message);
+      return NextResponse.json({ error: 'Failed to load CourtReserve events' }, { status: 500 });
+    }
+    if (tsEventsResult.error) {
+      console.error('[calendar/route] ts_events error:', tsEventsResult.error.message);
+      return NextResponse.json({ error: 'Failed to load Tripleseat events' }, { status: 500 });
+    }
+    if (tsLeadsResult.error) {
+      console.error('[calendar/route] ts_leads error:', tsLeadsResult.error.message);
+      return NextResponse.json({ error: 'Failed to load Tripleseat leads' }, { status: 500 });
+    }
+  
+    const courtMappings = courtMappingsResult.data as CourtMapping[];
+    const crReservations = crResult.data as CRReservation[];
+    const crEventRows = crEventsResult.data as CREvent[];
+    const tsEvents = tsEventsResult.data as TSEvent[];
+    const tsLeads = tsLeadsResult.data as TSLead[];
+  
+    const filters: CalendarFilters = {
+      sources: ['courtreserve', 'courtreserve_event', 'tripleseat_event', 'tripleseat_lead'],
+      statuses: ['confirmed', 'tentative', 'prospect'],
+      courtIds: [],
+    };
+  
+    const events = buildCalendarEvents(
+      crReservations,
+      crEventRows,
+      tsEvents,
+      tsLeads,
+      courtMappings,
+      filters
+    );
 
   return NextResponse.json({
     dates: visibleDates,
@@ -134,6 +155,7 @@ export async function GET(req: NextRequest) {
       counts: {
         courts: courtMappings.length,
         crReservations: crReservations.length,
+        crEvents: crEventRows.length,
         tsEvents: tsEvents.length,
         tsLeads: tsLeads.length,
         eventsAfterTransform: events.length,

@@ -39,6 +39,26 @@ export type CourtMapping = {
     instructor_name: string | null;
     status: string | null;
   };
+
+  export type CREvent = {
+    id: string;
+    location_id: string;
+    courtreserve_event_id: number;
+    courtreserve_reservation_id: number | null;
+    event_name: string | null;
+    event_category_id: number | null;
+    event_category_name: string | null;
+    start_datetime: string | null;     // stored as TIMESTAMPTZ but values are Eastern local
+    end_datetime: string | null;
+    court_ids: number[];
+    court_mapping_ids: string[];       // pre-computed UUIDs — no lookup needed
+    max_registrants: number | null;
+    registered_count: number | null;
+    waitlist_count: number | null;
+    is_canceled: boolean;
+    is_public: boolean;
+    public_event_url: string | null;
+  };
   
   export type TSEvent = {
     id: string;
@@ -73,7 +93,7 @@ export type CourtMapping = {
   
   // ── Calendar display types ────────────────────────────────────────
   
-  export type CalendarEventSource = 'courtreserve' | 'tripleseat_event' | 'tripleseat_lead';
+  export type CalendarEventSource = 'courtreserve' | 'courtreserve_event' | 'tripleseat_event' | 'tripleseat_lead';
   
   export type CalendarEventStatus =
     | 'confirmed'    // CR: Active  |  TS: DEFINITE
@@ -146,7 +166,7 @@ export type CourtMapping = {
   };
   
   export const DEFAULT_FILTERS: CalendarFilters = {
-    sources: ['courtreserve', 'tripleseat_event', 'tripleseat_lead'],
+    sources: ['courtreserve', 'courtreserve_event', 'tripleseat_event', 'tripleseat_lead'],
     statuses: ['confirmed', 'tentative', 'prospect'],
     courtIds: [],
   };

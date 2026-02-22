@@ -10,15 +10,16 @@
 // durationMinutes assumes endMinutes > startMinutes.
 
 import type {
-    CalendarEvent,
-    CalendarEventSource,
-    CalendarEventStatus,
-    CalendarFilters,
-    CourtMapping,
-    CRReservation,
-    TSEvent,
-    TSLead,
-  } from '@/lib/types/calendar';
+  CalendarEvent,
+  CalendarEventSource,
+  CalendarEventStatus,
+  CalendarFilters,
+  CourtMapping,
+  CRReservation,
+  CREvent,
+  TSEvent,
+  TSLead,
+} from '@/lib/types/calendar';
   
   // ── Timezone conversion ───────────────────────────────────────────
   
@@ -199,6 +200,64 @@ import type {
       eventType: null,
     };
   }
+
+  // ── CourtReserve Event transformer (leagues, open play, clinics) ──
+
+export function transformCREvent(
+  e: CREvent,
+  courtMappings: CourtMapping[]
+): CalendarEvent | null {
+  if (!e.start_datetime || !e.end_datetime) return null;
+  if (e.is_canceled) return null;
+
+  // start_datetime was stored from Eastern local strings with no TZ offset.
+  // Postgres TIMESTAMPTZ appended +00:00 treating them as UTC — but the
+  // actual clock values ARE Eastern local. Strip TZ suffix before parsing.
+  const localStart = e.start_datetime.replace(/[+-]\d{2}:\d{2}$/, '').replace('Z', '');
+  const localEnd   = e.end_datetime.replace(/[+-]\d{2}:\d{2}$/, '').replace('Z', '');
+
+  const startTime    = localToHHMM(localStart);
+  const endTime      = localToHHMM(localEnd);
+  const startMinutes = toMinutes(startTime);
+  const endMinutes   = toMinutes(endTime);
+
+  if (endMinutes <= startMinutes) return null;
+
+  const date = localStart.split('T')[0];
+
+  // court_mapping_ids pre-computed in DB — resolve court numbers from mapping
+  const courtMappingIds = e.court_mapping_ids ?? [];
+  const firstMapping = courtMappingIds.length > 0
+    ? courtMappings.find(m => m.id === courtMappingIds[0])
+    : null;
+
+  return {
+    id: `cr-event-${e.courtreserve_event_id}-${localStart}`,
+    originalRecordId: e.id,
+    source: 'courtreserve_event' as CalendarEventSource,
+    courtMappingIds,
+    courtNumber: firstMapping?.court_number ?? null,
+    isMultiCourt: courtMappingIds.length > 1,
+    title: e.event_name ?? e.event_category_name ?? 'Event',
+    category: e.event_category_name,
+    status: 'confirmed',
+    hasConflict: false,
+    date,
+    startTime,
+    endTime,
+    startMinutes,
+    endMinutes,
+    durationMinutes: endMinutes - startMinutes,
+    memberName: null,
+    memberEmail: null,
+    instructorName: null,
+    guestCount: e.registered_count,
+    roomIds: [],
+    contactName: null,
+    contactEmail: null,
+    eventType: e.event_category_name,
+  };
+}
   
   // ── Tripleseat Event transformer ──────────────────────────────────
   
@@ -308,13 +367,18 @@ import type {
   
   export function buildCalendarEvents(
     crReservations: CRReservation[],
+    crEventRows: CREvent[],
     tsEvents: TSEvent[],
     tsLeads: TSLead[],
     courtMappings: CourtMapping[],
     filters?: CalendarFilters
   ): CalendarEvent[] {
-    const crEvents = crReservations
+    const crReservationEvents = crReservations
       .map(r => transformCRReservation(r, courtMappings))
+      .filter((e): e is CalendarEvent => e !== null);
+  
+    const crProgramEvents = crEventRows
+      .map(e => transformCREvent(e, courtMappings))
       .filter((e): e is CalendarEvent => e !== null);
   
     const tsEventsMapped = tsEvents
@@ -325,7 +389,7 @@ import type {
       .map(l => transformTSLead(l, courtMappings))
       .filter((e): e is CalendarEvent => e !== null);
   
-    const all = [...crEvents, ...tsEventsMapped, ...tsLeadsMapped];
+    const all = [...crReservationEvents, ...crProgramEvents, ...tsEventsMapped, ...tsLeadsMapped];
   
     // Detect conflicts on full dataset BEFORE filtering.
     // Filtering first would erase real physical conflicts from remaining events.

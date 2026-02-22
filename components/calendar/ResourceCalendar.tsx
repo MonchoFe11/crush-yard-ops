@@ -10,6 +10,7 @@
 //   GRID_END    = 11pm (1380 min)
 //   HOUR_HEIGHT = 64px
 
+import { getGridEventClasses } from '@/lib/utils/event-style';
 import { useMemo, useRef, useEffect, useState } from 'react';
 import type { CalendarEvent, CourtMapping } from '@/lib/types/calendar';
 
@@ -51,30 +52,6 @@ function getEasternTimeMinutes(): number {
 }
 
 // ── Event CSS classes (uses globals.css design system) ────────────
-
-function getEventClasses(event: CalendarEvent): string {
-  const classes = ['event-block', 'absolute'];
-
-  if (event.source === 'tripleseat_lead') {
-    classes.push('lead');
-  } else if (event.source === 'tripleseat_event') {
-    classes.push('tripleseat');
-    if (event.status === 'tentative') classes.push('tentative');
-  } else {
-    // CourtReserve — differentiate lessons visually
-    classes.push('courtreserve');
-    if (
-      event.category === 'Private Lesson' ||
-      event.category === 'Beginner Session'
-    ) {
-      classes.push('lesson');
-    }
-  }
-
-  if (event.hasConflict) classes.push('has-conflict');
-
-  return classes.join(' ');
-}
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -189,7 +166,7 @@ function CourtColumn({ courtMapping, events, onEventClick }: CourtColumnProps) {
           <button
             key={event.id}
             onClick={() => onEventClick?.(event)}
-            className={getEventClasses(event)}
+            className={getGridEventClasses(event)}
             style={{
               top: top + 1,
               height: height - 2,

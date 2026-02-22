@@ -14,8 +14,8 @@
 
   /* Text */
   --text-primary: #F0F2F5;
-  --text-secondary: #A8B0BC;
-  --text-muted: #6B7280;
+  --text-secondary: #C4CBD6;
+  --text-muted: #D5DAE1;
   --text-on-primary: #FFFFFF;
 
   /* Brand / Source Colors */
@@ -166,7 +166,7 @@ textarea {
 
   /* ── Calendar event blocks ── */
   .event-block {
-    @apply rounded px-2 py-1 overflow-hidden border-l-2 cursor-pointer;
+    @apply rounded px-2 py-1 overflow-hidden border-l-4 cursor-pointer;
     transition: filter 150ms ease;
   }
 
@@ -189,14 +189,19 @@ textarea {
   .event-block.lead {
     background-color: var(--event-lead-bg);
     border-left-color: var(--event-lead-border);
-    border-left-style: dashed;
-    opacity: 0.8;
+    border-left-style: dotted;
+    opacity: 0.7;
     color: var(--text-secondary);
   }
 
   .event-block.tentative {
     border-left-style: dashed;
     opacity: 0.75;
+  }
+
+  .event-block.prospect {
+    border-left-style: dotted;
+    opacity: 0.7;
   }
 
   .event-block.has-conflict {

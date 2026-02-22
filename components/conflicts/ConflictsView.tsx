@@ -86,8 +86,9 @@ function formatConflictDate(dateStr: string): string {
 
 function sourceLabel(source: CalendarEvent['source']): string {
   switch (source) {
-    case 'courtreserve':     return 'CourtReserve';
-    case 'tripleseat_event': return 'Tripleseat';
+    case 'courtreserve':       return 'CourtReserve';
+    case 'courtreserve_event': return 'CourtReserve Event';
+    case 'tripleseat_event':   return 'Tripleseat';
     case 'tripleseat_lead':  return 'Lead';
   }
 }
@@ -95,13 +96,16 @@ function sourceLabel(source: CalendarEvent['source']): string {
 function sourceColors(source: CalendarEvent['source']): { bg: string; text: string } {
   switch (source) {
     case 'courtreserve':
+    case 'courtreserve_event':
       return { bg: 'rgba(114, 161, 154, 0.15)', text: 'var(--color-secondary)' };
     case 'tripleseat_event':
       return { bg: 'rgba(77, 119, 144, 0.15)', text: 'var(--color-primary)' };
-    case 'tripleseat_lead':
-      return { bg: 'rgba(209, 178, 72, 0.15)', text: 'var(--color-warning)' };
+      case 'tripleseat_lead':
+        return { bg: 'rgba(209, 178, 72, 0.15)', text: 'var(--color-warning)' };
+      default:
+        return { bg: 'rgba(114, 161, 154, 0.15)', text: 'var(--color-secondary)' };
+    }
   }
-}
 
 // ── Conflict event card ────────────────────────────────────────────
 

@@ -202,15 +202,15 @@ export function CalendarShell({
 
       {/* ── Calendar body ── */}
       <div className={`flex-1 min-h-0 overflow-hidden transition-opacity duration-150 ${isPending ? 'opacity-50' : 'opacity-100'}`}>
-        {viewMode === 'agenda' ? (
-          <AgendaView
+        {viewMode === 'day' ? (
+          <ResourceCalendar
             dates={dates}
             courtMappings={courtMappings}
             events={events}
             onEventClick={(event) => setSelectedEvent(event)}
           />
         ) : (
-          <ResourceCalendar
+          <AgendaView
             dates={dates}
             courtMappings={courtMappings}
             events={events}
