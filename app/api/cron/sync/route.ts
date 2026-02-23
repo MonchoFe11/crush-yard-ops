@@ -32,16 +32,28 @@ function toISOEastern(date: Date): string {
   return date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
+
+// Wraps fetch with a 30s timeout so a slow API response can't hang the entire sync.
+async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
 // ── Date window ──────────────────────────────────────────────────
 
 function getDateWindow(): { from: Date; to: Date } {
-  const now = new Date();
-  const from = new Date(now);
-  from.setDate(from.getDate() - 30);
-  const to = new Date(now);
-  to.setDate(to.getDate() + 90);
-  return { from, to };
-}
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - 14);
+    const to = new Date(now);
+    to.setDate(to.getDate() + 45);
+    return { from, to };
+  }
 
 // ── Sync log helper ──────────────────────────────────────────────
 
@@ -126,12 +138,12 @@ async function pullCourtReserve(
 
     let res: Response;
     try {
-      res = await fetch(url, {
-        headers: {
-          Authorization: `Basic ${crAuth}`,
-          'X-Org-Id': String(CR_ORG_ID),
-        },
-      });
+        res = await fetchWithTimeout(url, {
+            headers: {
+              Authorization: `Basic ${crAuth}`,
+              'X-Org-Id': String(CR_ORG_ID),
+            },
+          });
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : 'network error';
       await logSync(supabase, 'courtreserve', 'read', url, 0, 'error', msg);
@@ -236,12 +248,12 @@ async function pullCourtReserveEvents(
 
     let res: Response;
     try {
-      res = await fetch(url, {
-        headers: {
-          Authorization: `Basic ${crAuth}`,
-          'X-Org-Id': String(CR_ORG_ID),
-        },
-      });
+        res = await fetchWithTimeout(url, {
+            headers: {
+              Authorization: `Basic ${crAuth}`,
+              'X-Org-Id': String(CR_ORG_ID),
+            },
+          });
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : 'network error';
       await logSync(supabase, 'courtreserve_events', 'read', url, 0, 'error', msg);
@@ -329,9 +341,9 @@ async function pullTripleseatEvents(
 
     let res: Response;
     try {
-      res = await fetch(url, {
-        headers: { Authorization: `Bearer ${process.env.TRIPLESEAT_BEARER_TOKEN}` },
-      });
+        res = await fetchWithTimeout(url, {
+            headers: { Authorization: `Bearer ${process.env.TRIPLESEAT_BEARER_TOKEN}` },
+          });
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : 'network error';
       await logSync(supabase, 'tripleseat', 'read', url, 0, 'error', msg);
@@ -400,9 +412,9 @@ async function pullTripleseatLeads(
 
     let res: Response;
     try {
-      res = await fetch(url, {
-        headers: { Authorization: `Bearer ${process.env.TRIPLESEAT_BEARER_TOKEN}` },
-      });
+        res = await fetchWithTimeout(url, {
+            headers: { Authorization: `Bearer ${process.env.TRIPLESEAT_BEARER_TOKEN}` },
+          });
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : 'network error';
       await logSync(supabase, 'tripleseat', 'read', url, 0, 'error', msg);
