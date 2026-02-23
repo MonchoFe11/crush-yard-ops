@@ -32,18 +32,18 @@ const CATEGORY_MAP: Record<string, string> = {
 };
 
 const CATEGORY_ORDER = [
-  'Tripleseat Event',
+  'Events',
   'Private Lesson',
   'Beginner Session',
   'Fitness Session',
   'Indoor Pickleball',
   'Last Minute Reservation',
-  'Tripleseat Lead',
+  'Leads',
 ];
 
 const CATEGORY_STYLE: Record<string, { dotColor: string; labelColor: string }> = {
-  'Tripleseat Event':        { dotColor: 'var(--color-primary)',   labelColor: 'var(--color-primary)' },
-  'Tripleseat Lead':         { dotColor: 'var(--text-muted)',      labelColor: 'var(--text-muted)' },
+  'Events':                  { dotColor: 'var(--color-primary)',   labelColor: 'var(--color-primary)' },
+  'Leads':                   { dotColor: 'var(--text-muted)',      labelColor: 'var(--text-muted)' },
   'Private Lesson':          { dotColor: 'var(--color-secondary)', labelColor: 'var(--color-secondary)' },
   'Beginner Session':        { dotColor: 'var(--color-secondary)', labelColor: 'var(--color-secondary)' },
   'Fitness Session':         { dotColor: 'var(--color-success)',   labelColor: 'var(--color-success)' },
@@ -54,10 +54,9 @@ const CATEGORY_STYLE: Record<string, { dotColor: string; labelColor: string }> =
 // ── Helpers ───────────────────────────────────────────────────────
 
 function getCategoryGroup(event: CalendarEvent): string {
-  if (event.source === 'tripleseat_event') return 'Tripleseat Event';
-  if (event.source === 'tripleseat_lead')  return 'Tripleseat Lead';
+  if (event.source === 'tripleseat_event') return 'Events';
+  if (event.source === 'tripleseat_lead')  return 'Leads';
   if (!event.category) return 'Other';
-  // Use mapped name if known, otherwise use raw category name (not "Other")
   return CATEGORY_MAP[event.category] ?? event.category;
 }
 
@@ -71,12 +70,10 @@ function groupEventsByCategory(events: CalendarEvent[]): Map<string, CalendarEve
     map.get(group)!.push(event);
   }
 
-  // Enforce known order first, then append unknown categories alphabetically
   const ordered = new Map<string, CalendarEvent[]>();
   for (const cat of CATEGORY_ORDER) {
     if (map.has(cat)) ordered.set(cat, map.get(cat)!);
   }
-  // Append any unknown/raw categories that weren't in CATEGORY_ORDER
   const unknown = [...map.keys()]
     .filter(k => !CATEGORY_ORDER.includes(k))
     .sort();
@@ -181,13 +178,13 @@ function AgendaEventRow({
           </div>
 
           <div className="flex items-center gap-3 mt-1 flex-wrap">
-          {courtLabel ? (
+            {courtLabel ? (
               <span className="flex items-center gap-1 text-xs text-(--text-secondary)">
                 <MapPin size={11} />
                 {courtLabel}
               </span>
             ) : isUnassigned ? (
-              <span className="flex items-center gap-1 text-xs italic" style={{ color: 'var(--text-muted)' }}>
+              <span className="flex items-center gap-1 text-xs italic text-(--text-muted)">
                 <MapPin size={11} />
                 Unassigned
               </span>
@@ -284,12 +281,14 @@ function DaySection({
   dateStr,
   events,
   onEventClick,
+  isToday,
 }: {
   dateStr: string;
   events: CalendarEvent[];
   onEventClick?: (event: CalendarEvent) => void;
+  isToday?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(!isToday);
   const conflictCount = events.filter(e => e.hasConflict).length;
   const grouped = groupEventsByCategory(events);
 
@@ -365,16 +364,20 @@ function EmptyDay() {
 
 export function AgendaView({
   dates,
-  courtMappings,
   events,
   onEventClick,
-}: AgendaViewProps) {
+}: Omit<AgendaViewProps, 'courtMappings'> & { courtMappings: CourtMapping[] }) {
   const isWeekMode = dates.length > 1;
 
   // ── Week mode ─────────────────────────────────────────────────
   if (isWeekMode) {
     const byDate = groupEventsByDate(events, dates);
     const totalConflicts = events.filter(e => e.hasConflict).length;
+    const todayEastern = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/New_York',
+    });
+    const activeCourtIds = new Set(events.flatMap(e => e.courtMappingIds));
+    const unassignedCount = events.filter(e => e.courtMappingIds.length === 0).length;
 
     return (
       <div className="h-full overflow-y-auto px-6 py-4">
@@ -389,10 +392,13 @@ export function AgendaView({
               {events.length} events
             </span>
             <span className="text-xs text-(--text-muted)">
-              {courtMappings.filter(c =>
-                events.some(e => e.courtMappingIds.includes(c.id))
-              ).length} courts active
+              {activeCourtIds.size} courts active
             </span>
+            {unassignedCount > 0 && (
+              <span className="text-xs text-(--text-muted)">
+                {unassignedCount} unassigned
+              </span>
+            )}
             {totalConflicts > 0 && (
               <span
                 className="flex items-center gap-1 text-xs font-medium"
@@ -413,6 +419,7 @@ export function AgendaView({
               dateStr={dateStr}
               events={dayEvents}
               onEventClick={onEventClick}
+              isToday={dateStr === todayEastern}
             />
           ))}
         </div>
@@ -425,6 +432,7 @@ export function AgendaView({
   if (events.length === 0) return <EmptyDay />;
 
   const grouped = groupEventsByCategory(events);
+  const activeCourtIds = new Set(events.flatMap(e => e.courtMappingIds));
   const dateLabel = dates[0]
     ? new Date(dates[0] + 'T00:00:00Z').toLocaleDateString('en-US', {
         weekday: 'long',
@@ -448,9 +456,7 @@ export function AgendaView({
             {events.length} events
           </span>
           <span className="text-xs text-(--text-muted)">
-            {courtMappings.filter(c =>
-              events.some(e => e.courtMappingIds.includes(c.id))
-            ).length} courts active
+            {activeCourtIds.size} courts active
           </span>
           {events.some(e => e.hasConflict) && (
             <span

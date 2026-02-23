@@ -32,13 +32,37 @@
   --color-error: #B02A20;
   --color-conflict: #C0392B;
 
-  /* Calendar Event Colors */
-  --event-tripleseat-bg: rgba(77, 119, 144, 0.15);
-  --event-tripleseat-border: #4D7790;
-  --event-courtreserve-bg: rgba(114, 161, 154, 0.15);
-  --event-courtreserve-border: #72A19A;
-  --event-lead-bg: rgba(77, 119, 144, 0.06);
-  --event-lead-border: #4D7790;
+  /* Calendar Event Colors — Semantic Operational Palette */
+  /* Confirmed Event — success green, revenue locked */
+  --event-confirmed-bg: rgba(76, 128, 74, 0.22);
+  --event-confirmed-border: #4C804A;
+
+  /* Prospect / Lead — warning gold, potential revenue */
+  --event-prospect-bg: rgba(209, 178, 72, 0.18);
+  --event-prospect-border: #D1B248;
+
+  /* Instructor Programming — muted orange, pro required */
+  --event-lesson-bg: rgba(196, 122, 58, 0.20);
+  --event-lesson-border: #C47A3A;
+
+  /* Institutional Programming — asana purple, immovable */
+  --event-league-bg: rgba(139, 126, 200, 0.20);
+  --event-league-border: #8B7EC8;
+
+  /* Confirmed Reservation — primary blue heavy, paid booking */
+  --event-reservation-bg: rgba(77, 119, 144, 0.22);
+  --event-reservation-border: #4D7790;
+
+  /* Movable Programming — primary blue light, pressure release */
+  --event-movable-bg: rgba(77, 119, 144, 0.12);
+  --event-movable-border: #4D7790;
+
+  /* Maintenance / Internal Hold — gray, unavailable */
+  --event-maintenance-bg: rgba(107, 114, 128, 0.20);
+  --event-maintenance-border: #6B7280;
+
+  /* Conflict — overrides everything, emergency only */
+  --event-conflict-bg: rgba(192, 57, 43, 0.20);
   --event-conflict-accent: #C0392B;
 
   /* Borders */
@@ -168,45 +192,71 @@ textarea {
   .event-block {
     @apply rounded px-2 py-1 overflow-hidden border-l-4 cursor-pointer;
     transition: filter 150ms ease;
+    position: relative;
   }
 
   .event-block:hover {
     filter: brightness(1.12);
   }
 
-  .event-block.tripleseat {
-    background-color: var(--event-tripleseat-bg);
-    border-left-color: var(--event-tripleseat-border);
+  /* Confirmed Event — green, revenue locked */
+  .event-block.confirmed-event {
+    background-color: var(--event-confirmed-bg);
+    border-left-color: var(--event-confirmed-border);
     color: var(--text-primary);
   }
 
-  .event-block.courtreserve {
-    background-color: var(--event-courtreserve-bg);
-    border-left-color: var(--event-courtreserve-border);
+  /* Prospect / Lead — gold dashed, potential revenue */
+  .event-block.prospect-event {
+    background-color: var(--event-prospect-bg);
+    border-left-color: var(--event-prospect-border);
+    border-left-style: dashed;
+    color: var(--text-primary);
+    opacity: 0.90;
+  }
+
+  /* Instructor Programming — orange, pro required */
+  .event-block.lesson {
+    background-color: var(--event-lesson-bg);
+    border-left-color: var(--event-lesson-border);
     color: var(--text-primary);
   }
 
-  .event-block.lead {
-    background-color: var(--event-lead-bg);
-    border-left-color: var(--event-lead-border);
-    border-left-style: dotted;
-    opacity: 0.7;
+  /* Institutional Programming — purple, immovable */
+  .event-block.league {
+    background-color: var(--event-league-bg);
+    border-left-color: var(--event-league-border);
+    color: var(--text-primary);
+  }
+
+  /* Confirmed Reservation — blue heavy, paid booking */
+  .event-block.reservation {
+    background-color: var(--event-reservation-bg);
+    border-left-color: var(--event-reservation-border);
+    color: var(--text-primary);
+  }
+
+  /* Movable Programming — blue light, pressure release valve */
+  .event-block.movable {
+    background-color: var(--event-movable-bg);
+    border-left-color: var(--event-movable-border);
     color: var(--text-secondary);
   }
 
-  .event-block.tentative {
-    border-left-style: dashed;
-    opacity: 0.75;
+  /* Maintenance / Internal Hold — gray, unavailable */
+  .event-block.maintenance {
+    background-color: var(--event-maintenance-bg);
+    border-left-color: var(--event-maintenance-border);
+    color: var(--text-muted);
+    opacity: 0.80;
   }
 
-  .event-block.prospect {
-    border-left-style: dotted;
-    opacity: 0.7;
-  }
-
+  /* Conflict overrides all semantic colors — !important required due to cascade order */
   .event-block.has-conflict {
-    border-left-color: var(--event-conflict-accent);
-    box-shadow: inset 3px 0 0 var(--event-conflict-accent);
+    background-color: var(--event-conflict-bg) !important;
+    border-left-color: var(--event-conflict-accent) !important;
+    border-left-width: 4px !important;
+    box-shadow: inset 0 0 0 1px rgba(192, 57, 43, 0.35);
   }
 
   /* ── Event block typography ── */
@@ -218,6 +268,15 @@ textarea {
   .event-meta {
     font-size: 10px;
     opacity: 0.8;
+  }
+
+  /* ── PRO badge (injected via JSX span, styled here) ── */
+  .event-pro-badge {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--color-warning);
+    line-height: 1;
   }
 
   /* ── Status badges ── */

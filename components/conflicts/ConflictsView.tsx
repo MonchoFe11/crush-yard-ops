@@ -88,7 +88,7 @@ function sourceLabel(source: CalendarEvent['source']): string {
   switch (source) {
     case 'courtreserve':       return 'CourtReserve';
     case 'courtreserve_event': return 'CourtReserve Event';
-    case 'tripleseat_event':   return 'Tripleseat';
+    case 'tripleseat_event':   return 'Event';
     case 'tripleseat_lead':  return 'Lead';
   }
 }

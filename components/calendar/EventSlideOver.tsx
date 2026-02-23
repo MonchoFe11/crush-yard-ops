@@ -32,8 +32,8 @@ function sourceLabel(event: CalendarEvent): string {
   switch (event.source) {
     case 'courtreserve':       return 'CourtReserve';
     case 'courtreserve_event': return 'CourtReserve Event';
-    case 'tripleseat_event':   return 'Tripleseat Event';
-    case 'tripleseat_lead':  return 'Tripleseat Lead';
+    case 'tripleseat_event':   return 'Event';
+    case 'tripleseat_lead':    return 'Lead';
   }
 }
 
@@ -75,7 +75,7 @@ function DetailRow({
         <p className="text-xs text-(--text-muted) uppercase tracking-wider mb-0.5">
           {label}
         </p>
-        <p className="text-sm text-(--text-primary) break-words">{value}</p>
+        <p className="text-sm text-(--text-primary) wrap-break-word">{value}</p>
       </div>
     </div>
   );

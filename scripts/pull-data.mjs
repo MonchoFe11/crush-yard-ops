@@ -43,8 +43,15 @@ FROM_DATE.setDate(FROM_DATE.getDate() - 30);
 const TO_DATE = new Date(now);
 TO_DATE.setDate(TO_DATE.getDate() + 90);
 
+// For display/logging only. Use toISOEastern() for all API date parameters.
 function toISO(date) {
   return date.toISOString().split('T')[0];
+}
+
+// Eastern-aware date string for API calls. Prevents off-by-one errors for Orlando facility.
+// TODO: replace 'America/New_York' with dynamic facility.timezone when multi-location supported
+function toISOEastern(date) {
+  return date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
 async function logSync(source, operation, endpoint, records, status, error = null, duration = null) {
@@ -105,8 +112,8 @@ async function pullCourtReserve(locationUUID, courtMappings) {
 
   for (const chunk of chunks) {
     const params = new URLSearchParams({
-      reservationsFromDate: toISO(chunk.from),
-      reservationsToDate: toISO(chunk.to),
+      reservationsFromDate: toISOEastern(chunk.from),
+      reservationsToDate: toISOEastern(chunk.to),
     });
 
     const url = `https://api.courtreserve.com/api/v1/reservationreport/listactive?${params}`;
@@ -342,7 +349,7 @@ async function pullTripleseatEvents(locationUUID, courtMappings) {
   }
 
   while (true) {
-    const url = `https://api.tripleseat.com/v1/events?location_id=${TS_LOCATION_ID}&start_date=${toISO(FROM_DATE)}&end_date=${toISO(TO_DATE)}&page=${page}`;
+    const url = `https://api.tripleseat.com/v1/events?location_id=${TS_LOCATION_ID}&start_date=${toISOEastern(FROM_DATE)}&end_date=${toISOEastern(TO_DATE)}&page=${page}`;
 
     let res;
     try {
@@ -419,7 +426,7 @@ async function pullTripleseatLeads(locationUUID) {
   let page = 1;
 
   while (true) {
-    const url = `https://api.tripleseat.com/v1/leads?location_id=${TS_LOCATION_ID}&start_date=${toISO(FROM_DATE)}&end_date=${toISO(TO_DATE)}&page=${page}`;
+    const url = `https://api.tripleseat.com/v1/leads?location_id=${TS_LOCATION_ID}&start_date=${toISOEastern(FROM_DATE)}&end_date=${toISOEastern(TO_DATE)}&page=${page}`;
 
     let res;
     try {

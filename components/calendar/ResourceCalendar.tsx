@@ -1,28 +1,17 @@
 'use client';
 
 // components/calendar/ResourceCalendar.tsx
-// The 2D resource grid — courts as columns, time as rows.
-// Events positioned with CSS absolute positioning using precomputed
-// startMinutes/endMinutes from the transform layer.
-//
-// Grid constants:
-//   GRID_START  = 6am  (360 min)
-//   GRID_END    = 11pm (1380 min)
-//   HOUR_HEIGHT = 64px
 
-import { getGridEventClasses } from '@/lib/utils/event-style';
+import { getEventClasses, getGridEventClasses } from '@/lib/utils/event-style';
 import { useMemo, useRef, useEffect, useState } from 'react';
+import { ChevronDown, ChevronUp, Info } from 'lucide-react';
 import type { CalendarEvent, CourtMapping } from '@/lib/types/calendar';
-
-// ── Grid constants ────────────────────────────────────────────────
 
 const GRID_START = 6 * 60;
 const GRID_END = 23 * 60;
 const HOUR_HEIGHT = 64;
-const TOTAL_HEIGHT = ((GRID_END - GRID_START) / 60) * HOUR_HEIGHT; // 1088px
+const TOTAL_HEIGHT = ((GRID_END - GRID_START) / 60) * HOUR_HEIGHT;
 const TIME_COL_WIDTH = 56;
-
-// ── Helpers ───────────────────────────────────────────────────────
 
 function minutesToPx(minutes: number): number {
   return ((minutes - GRID_START) / 60) * HOUR_HEIGHT;
@@ -38,8 +27,6 @@ function formatHour(hour: number): string {
   return hour < 12 ? `${hour} AM` : `${hour - 12} PM`;
 }
 
-// Eastern-aware current time — all event data is Eastern,
-// indicator must match regardless of user's device timezone
 function getEasternTimeMinutes(): number {
   const easternStr = new Date().toLocaleString('en-US', {
     timeZone: 'America/New_York',
@@ -51,15 +38,164 @@ function getEasternTimeMinutes(): number {
   return h * 60 + m;
 }
 
-// ── Event CSS classes (uses globals.css design system) ────────────
-
-// ── Types ─────────────────────────────────────────────────────────
-
 interface ResourceCalendarProps {
   dates: string[];
   courtMappings: CourtMapping[];
   events: CalendarEvent[];
   onEventClick?: (event: CalendarEvent) => void;
+}
+
+// ── Events Pipeline Panel ─────────────────────────────────────────
+
+interface EventsPipelinePanelProps {
+  events: CalendarEvent[];
+  courtMappings: CourtMapping[];
+  open: boolean;
+  onToggle: () => void;
+  onEventClick?: (event: CalendarEvent) => void;
+}
+
+function EventsPipelinePanel({
+  events,
+  courtMappings,
+  open,
+  onToggle,
+  onEventClick,
+}: EventsPipelinePanelProps) {
+  const venueEvents = useMemo(() => {
+    const filtered = events.filter(
+      e => e.source === 'tripleseat_event' || e.source === 'tripleseat_lead'
+    );
+    return [...filtered].sort((a, b) => {
+      if (a.hasConflict !== b.hasConflict) return a.hasConflict ? -1 : 1;
+      return a.startMinutes - b.startMinutes;
+    });
+  }, [events]);
+
+  if (venueEvents.length === 0) return null;
+
+  const conflictCount = venueEvents.filter(e => e.hasConflict).length;
+
+  function getCourtLabel(event: CalendarEvent): string {
+    if (event.courtMappingIds.length === 0) return 'Off-Court';
+    const numbers = event.courtMappingIds
+      .map(id => courtMappings.find(m => m.id === id)?.court_number)
+      .filter((n): n is number => n !== undefined)
+      .sort((a, b) => a - b);
+    return numbers.length > 0 ? `Courts ${numbers.join(', ')}` : 'Off-Court';
+  }
+
+  function getStatusLabel(event: CalendarEvent): string {
+    switch (event.status) {
+      case 'confirmed': return 'Confirmed';
+      case 'tentative': return 'Tentative';
+      case 'prospect':  return 'Prospect';
+      case 'cancelled': return 'Cancelled';
+    }
+  }
+
+  function getStatusClass(event: CalendarEvent): string {
+    switch (event.status) {
+      case 'confirmed': return 'text-(--color-secondary)';
+      case 'tentative': return 'text-(--color-primary)';
+      case 'prospect':  return 'text-(--text-muted)';
+      case 'cancelled': return 'text-(--color-error)';
+    }
+  }
+
+  return (
+    <div className="shrink-0 border-b border-(--border-light) bg-(--bg-tertiary)">
+
+      {/* Header */}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-(--bg-primary)/40 transition-colors"
+      >
+        <span className="text-xs font-bold tracking-widest text-(--text-secondary) uppercase">
+          Events Pipeline
+        </span>
+
+        <span className="text-xs text-(--text-muted) font-mono">
+          · {venueEvents.length} event{venueEvents.length !== 1 ? 's' : ''}
+        </span>
+
+        {conflictCount > 0 && (
+          <span
+            className="text-xs font-semibold font-mono"
+            style={{ color: 'var(--color-error)' }}
+          >
+            · {conflictCount} conflict{conflictCount !== 1 ? 's' : ''}
+          </span>
+        )}
+
+        <div
+          className="ml-0.5 text-(--text-muted)"
+          title="All bookings from your events platform for this day. Court assignments shown per card. Leads appear as prospects in the pipeline."
+        >
+          <Info size={11} />
+        </div>
+
+        <div className="ml-auto text-(--text-muted)">
+          {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </div>
+      </button>
+
+      {/* Card strip */}
+      {open && (
+        <div className="flex flex-nowrap overflow-x-auto gap-2 px-3 pb-2">
+          {venueEvents.map(event => {
+            const courtLabel = getCourtLabel(event);
+            const isOffCourt = courtLabel === 'Off-Court';
+
+            return (
+              <button
+                key={event.id}
+                onClick={() => onEventClick?.(event)}
+                className={`${getEventClasses(event)} shrink-0 flex flex-col justify-between gap-1 px-2.5 py-2 rounded text-left min-w-[180px] max-w-[240px] relative`}
+              >
+                {event.hasConflict && (
+                  <span
+                    className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: 'var(--color-error)' }}
+                  />
+                )}
+
+                <p className="event-title truncate pr-3 text-xs font-semibold leading-tight">
+                  {event.title}
+                </p>
+
+                <p className="event-meta text-xs leading-tight">
+                  {event.startTime}–{event.endTime}
+                </p>
+
+                {event.guestCount !== null && event.guestCount > 0 && (
+                  <p className="event-meta text-xs leading-tight">
+                    {event.guestCount} guests
+                  </p>
+                )}
+
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  <span className={`text-xs font-mono leading-tight ${getStatusClass(event)}`}>
+                    {getStatusLabel(event)}
+                  </span>
+                  <span className="text-(--text-muted) text-xs">·</span>
+                  <span
+                    className={`text-xs leading-tight font-mono ${
+                      isOffCourt
+                        ? 'text-(--text-muted) italic'
+                        : 'text-(--color-secondary)'
+                    }`}
+                  >
+                    {courtLabel}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Time gutter ───────────────────────────────────────────────────
@@ -97,8 +233,6 @@ interface CourtColumnProps {
 }
 
 function CourtColumn({ courtMapping, events, onEventClick }: CourtColumnProps) {
-  // Filter + overlap positioning inside useMemo —
-  // prevents dependency busting on every render
   const positioned = useMemo(() => {
     const courtEvents = events.filter(e =>
       e.courtMappingIds.includes(courtMapping.id)
@@ -136,7 +270,6 @@ function CourtColumn({ courtMapping, events, onEventClick }: CourtColumnProps) {
       className="relative border-r border-(--border-light) min-w-[140px] flex-1"
       style={{ height: TOTAL_HEIGHT }}
     >
-      {/* Hour grid lines */}
       {hourLines.map(h => (
         <div
           key={h}
@@ -144,8 +277,6 @@ function CourtColumn({ courtMapping, events, onEventClick }: CourtColumnProps) {
           style={{ top: minutesToPx(h * 60) }}
         />
       ))}
-
-      {/* Half-hour lines */}
       {hourLines.map(h => (
         <div
           key={`${h}-half`}
@@ -153,8 +284,6 @@ function CourtColumn({ courtMapping, events, onEventClick }: CourtColumnProps) {
           style={{ top: minutesToPx(h * 60 + 30) }}
         />
       ))}
-
-      {/* Event blocks */}
       {positioned.map(({ event, colIndex, totalCols }) => {
         const top = minutesToPx(event.startMinutes);
         const height = Math.max(durationToPx(event.durationMinutes), 20);
@@ -211,9 +340,6 @@ function CourtColumn({ courtMapping, events, onEventClick }: CourtColumnProps) {
 }
 
 // ── Current time indicator ────────────────────────────────────────
-// Uses Eastern time to match event data regardless of device timezone.
-// Updates every 60 seconds via setInterval.
-// Hydration-safe: null on server, real value after mount.
 
 function CurrentTimeIndicator() {
   const [minutes, setMinutes] = useState<number | null>(null);
@@ -261,8 +387,8 @@ export function ResourceCalendar({
   onEventClick,
 }: ResourceCalendarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [pipelineOpen, setPipelineOpen] = useState(true);
 
-  // Auto-scroll to 2 hours before current time on mount + date change
   useEffect(() => {
     if (!scrollRef.current) return;
     const minutes = getEasternTimeMinutes();
@@ -283,6 +409,15 @@ export function ResourceCalendar({
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-(--bg-primary)">
+
+      {/* ── Events Pipeline Panel ── */}
+      <EventsPipelinePanel
+        events={events}
+        courtMappings={courtMappings}
+        open={pipelineOpen}
+        onToggle={() => setPipelineOpen(prev => !prev)}
+        onEventClick={onEventClick}
+      />
 
       {/* ── Court header row ── */}
       <div
@@ -313,10 +448,7 @@ export function ResourceCalendar({
           className="flex"
           style={{ height: TOTAL_HEIGHT, minWidth: 'max-content' }}
         >
-          {/* Time gutter */}
           <TimeGutter />
-
-          {/* Court columns with current time overlay */}
           <div className="relative flex flex-1 min-w-0">
             <CurrentTimeIndicator />
             {courtMappings.map(court => (
