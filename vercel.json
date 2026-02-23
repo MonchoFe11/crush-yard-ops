@@ -1,8 +1,12 @@
 {
     "crons": [
       {
-        "path": "/api/cron/sync",
+        "path": "/api/cron/sync?target=courtreserve",
         "schedule": "0 */2 * * *"
+      },
+      {
+        "path": "/api/cron/sync?target=tripleseat",
+        "schedule": "5 */2 * * *"
       }
     ]
   }

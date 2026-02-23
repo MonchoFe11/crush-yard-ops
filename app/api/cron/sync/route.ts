@@ -1,12 +1,14 @@
 // app/api/cron/sync/route.ts
-// Automated data sync — triggered by Vercel Cron every 30 minutes.
-// Also callable manually for debugging.
+// Automated data sync — triggered by Vercel Cron every 2 hours.
+// Two staggered jobs: ?target=courtreserve at :00, ?target=tripleseat at :05
 //
 // Security: validates Authorization header against CRON_SECRET env var.
-// Timeout: maxDuration = 300 (5 min) required — full sync takes 30-60s
-// with pagination delays. Default 15s Vercel limit would kill it mid-run.
+// Timeout: maxDuration = 300 (5 min) — hard ceiling on Vercel Pro.
 //
-// TIMEZONE RULE: toISOEastern() used for all date-only API params.
+// DELTA WINDOW: -7 days to +30 days. Keeps near-term data fresh.
+// Deep historical syncs (120 days) run via scripts/pull-data.mjs manually.
+//
+// TIMEZONE RULE: toISOEastern() for all date-only API params.
 // CourtReserve Events endpoint uses toISOString() (UTC) — correct for timestamps.
 
 import { createAdminClient } from '@/lib/supabase/server';
@@ -32,28 +34,29 @@ function toISOEastern(date: Date): string {
   return date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
-
 // Wraps fetch with a 30s timeout so a slow API response can't hang the entire sync.
 async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30_000);
-    try {
-      return await fetch(url, { ...options, signal: controller.signal });
-    } finally {
-      clearTimeout(timer);
-    }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
   }
+}
 
-// ── Date window ──────────────────────────────────────────────────
+// ── Delta date window ────────────────────────────────────────────
+// Cron only syncs recent/upcoming changes.
+// Deep historical syncs should be run via the manual CLI script.
 
 function getDateWindow(): { from: Date; to: Date } {
-    const now = new Date();
-    const from = new Date(now);
-    from.setDate(from.getDate() - 14);
-    const to = new Date(now);
-    to.setDate(to.getDate() + 45);
-    return { from, to };
-  }
+  const now = new Date();
+  const from = new Date(now);
+  from.setDate(from.getDate() - 7);
+  const to = new Date(now);
+  to.setDate(to.getDate() + 30);
+  return { from, to };
+}
 
 // ── Sync log helper ──────────────────────────────────────────────
 
@@ -129,6 +132,8 @@ async function pullCourtReserve(
   }
 
   for (const chunk of chunks) {
+    if (Date.now() - start > 240_000) break;
+
     const params = new URLSearchParams({
       reservationsFromDate: toISOEastern(chunk.from),
       reservationsToDate: toISOEastern(chunk.to),
@@ -138,12 +143,12 @@ async function pullCourtReserve(
 
     let res: Response;
     try {
-        res = await fetchWithTimeout(url, {
-            headers: {
-              Authorization: `Basic ${crAuth}`,
-              'X-Org-Id': String(CR_ORG_ID),
-            },
-          });
+      res = await fetchWithTimeout(url, {
+        headers: {
+          Authorization: `Basic ${crAuth}`,
+          'X-Org-Id': String(CR_ORG_ID),
+        },
+      });
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : 'network error';
       await logSync(supabase, 'courtreserve', 'read', url, 0, 'error', msg);
@@ -196,8 +201,6 @@ async function pullCourtReserve(
       .upsert(rows, { onConflict: 'location_id,courtreserve_reservation_id' });
 
     if (!error) totalInserted += rows.length;
-
-    await new Promise(r => setTimeout(r, 200));
   }
 
   const duration = Date.now() - start;
@@ -238,6 +241,8 @@ async function pullCourtReserveEvents(
   }
 
   for (const chunk of chunks) {
+    if (Date.now() - start > 240_000) break;
+
     const params = new URLSearchParams({
       startDate: chunk.from.toISOString(),
       endDate: chunk.to.toISOString(),
@@ -248,12 +253,12 @@ async function pullCourtReserveEvents(
 
     let res: Response;
     try {
-        res = await fetchWithTimeout(url, {
-            headers: {
-              Authorization: `Basic ${crAuth}`,
-              'X-Org-Id': String(CR_ORG_ID),
-            },
-          });
+      res = await fetchWithTimeout(url, {
+        headers: {
+          Authorization: `Basic ${crAuth}`,
+          'X-Org-Id': String(CR_ORG_ID),
+        },
+      });
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : 'network error';
       await logSync(supabase, 'courtreserve_events', 'read', url, 0, 'error', msg);
@@ -269,7 +274,6 @@ async function pullCourtReserveEvents(
     const events = json.Data ?? [];
     if (!Array.isArray(events) || events.length === 0) continue;
 
-    // Deduplicate recurring events within chunk
     const seen = new Set<string>();
     const dedupedEvents: unknown[] = [];
     for (const e of events) {
@@ -316,8 +320,6 @@ async function pullCourtReserveEvents(
       .upsert(rows, { onConflict: 'location_id,courtreserve_event_id,start_datetime' });
 
     if (!error) totalInserted += rows.length;
-
-    await new Promise(r => setTimeout(r, 200));
   }
 
   const duration = Date.now() - start;
@@ -335,15 +337,19 @@ async function pullTripleseatEvents(
   let totalInserted = 0;
   let page = 1;
   const start = Date.now();
+  const MAX_PAGES = 25;
 
   while (true) {
+    if (Date.now() - start > 240_000) break;
+    if (page > MAX_PAGES) break;
+
     const url = `https://api.tripleseat.com/v1/events?location_id=${TS_LOCATION_ID}&start_date=${toISOEastern(from)}&end_date=${toISOEastern(to)}&page=${page}`;
 
     let res: Response;
     try {
-        res = await fetchWithTimeout(url, {
-            headers: { Authorization: `Bearer ${process.env.TRIPLESEAT_BEARER_TOKEN}` },
-          });
+      res = await fetchWithTimeout(url, {
+        headers: { Authorization: `Bearer ${process.env.TRIPLESEAT_BEARER_TOKEN}` },
+      });
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : 'network error';
       await logSync(supabase, 'tripleseat', 'read', url, 0, 'error', msg);
@@ -388,7 +394,6 @@ async function pullTripleseatEvents(
 
     if (page >= (json.total_pages ?? 1)) break;
     page++;
-    await new Promise(r => setTimeout(r, 200));
   }
 
   const duration = Date.now() - start;
@@ -406,15 +411,19 @@ async function pullTripleseatLeads(
   let totalInserted = 0;
   let page = 1;
   const start = Date.now();
+  const MAX_PAGES = 25;
 
   while (true) {
+    if (Date.now() - start > 240_000) break;
+    if (page > MAX_PAGES) break;
+
     const url = `https://api.tripleseat.com/v1/leads?location_id=${TS_LOCATION_ID}&start_date=${toISOEastern(from)}&end_date=${toISOEastern(to)}&page=${page}`;
 
     let res: Response;
     try {
-        res = await fetchWithTimeout(url, {
-            headers: { Authorization: `Bearer ${process.env.TRIPLESEAT_BEARER_TOKEN}` },
-          });
+      res = await fetchWithTimeout(url, {
+        headers: { Authorization: `Bearer ${process.env.TRIPLESEAT_BEARER_TOKEN}` },
+      });
     } catch (fetchErr) {
       const msg = fetchErr instanceof Error ? fetchErr.message : 'network error';
       await logSync(supabase, 'tripleseat', 'read', url, 0, 'error', msg);
@@ -467,7 +476,6 @@ async function pullTripleseatLeads(
 
     if (leads.length < 50) break;
     page++;
-    await new Promise(r => setTimeout(r, 200));
   }
 
   const duration = Date.now() - start;
@@ -478,42 +486,50 @@ async function pullTripleseatLeads(
 // ── GET handler ──────────────────────────────────────────────────
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  // Validate CRON_SECRET
   const authHeader = request.headers.get('Authorization');
   const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
   if (authHeader !== expectedAuth) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const target = request.nextUrl.searchParams.get('target');
+  const records: Record<string, number> = {};
   const syncStart = Date.now();
 
   try {
     const supabase = createAdminClient();
     const { from, to } = getDateWindow();
-    const courtMappings = await getCourtMappings(supabase);
 
-    const [crReservations, crEvents, tsEvents, tsLeads] = await Promise.all([
-      pullCourtReserve(supabase, courtMappings, from, to),
-      pullCourtReserveEvents(supabase, courtMappings, from, to),
-      pullTripleseatEvents(supabase, from, to),
-      pullTripleseatLeads(supabase, from, to),
-    ]);
+    if (target === 'courtreserve') {
+      const courtMappings = await getCourtMappings(supabase);
+      const [crReservations, crEvents] = await Promise.all([
+        pullCourtReserve(supabase, courtMappings, from, to),
+        pullCourtReserveEvents(supabase, courtMappings, from, to),
+      ]);
+      records.cr_reservations = crReservations;
+      records.cr_events = crEvents;
+    } else if (target === 'tripleseat') {
+      const [tsEvents, tsLeads] = await Promise.all([
+        pullTripleseatEvents(supabase, from, to),
+        pullTripleseatLeads(supabase, from, to),
+      ]);
+      records.ts_events = tsEvents;
+      records.ts_leads = tsLeads;
+    } else {
+      return NextResponse.json({ error: 'Invalid or missing target parameter' }, { status: 400 });
+    }
 
     return NextResponse.json({
       success: true,
+      target,
       duration_ms: Date.now() - syncStart,
       window: { from: toISO(from), to: toISO(to) },
-      records: {
-        cr_reservations: crReservations,
-        cr_events: crEvents,
-        ts_events: tsEvents,
-        ts_leads: tsLeads,
-      },
+      records,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json(
-      { success: false, error: message, duration_ms: Date.now() - syncStart },
+      { success: false, target, error: message, duration_ms: Date.now() - syncStart },
       { status: 500 }
     );
   }
