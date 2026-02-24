@@ -8,8 +8,8 @@
 import { EventSlideOver } from '@/components/calendar/EventSlideOver';
 import { AgendaView } from '@/components/calendar/AgendaView';
 import { ResourceCalendar } from '@/components/calendar/ResourceCalendar';
-import { useState, useCallback, useTransition } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, LayoutList, CalendarDays, RefreshCw } from 'lucide-react';
+import { useState, useCallback, useTransition, useMemo, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Calendar, LayoutList, CalendarDays, RefreshCw, Layers, Activity, Ticket } from 'lucide-react';
 import type {
   CalendarEvent,
   CalendarViewMode,
@@ -18,6 +18,8 @@ import type {
 
 // ── Types ─────────────────────────────────────────────────────────
 
+type SourceFilter = 'all' | 'courts' | 'venue';
+
 interface CalendarShellProps {
   initialDate: string;
   initialCourtMappings: CourtMapping[];
@@ -25,11 +27,42 @@ interface CalendarShellProps {
   initialDates: string[];
 }
 
+// ── Source filter config ──────────────────────────────────────────
+
+interface SourceFilterConfig {
+  value: SourceFilter;
+  label: string;
+  icon: React.ElementType;
+  title: string;
+  sources: CalendarEvent['source'][];
+}
+
+const SOURCE_FILTERS: SourceFilterConfig[] = [
+  {
+    value: 'all',
+    label: 'Command Center',
+    icon: Layers,
+    title: 'Show all sources',
+    sources: ['courtreserve', 'courtreserve_event', 'tripleseat_event', 'tripleseat_lead'],
+  },
+  {
+    value: 'courts',
+    label: 'Courts & Ops',
+    icon: Activity,
+    title: 'CourtReserve data only',
+    sources: ['courtreserve', 'courtreserve_event'],
+  },
+  {
+    value: 'venue',
+    label: 'Venue Events',
+    icon: Ticket,
+    title: 'Tripleseat data only',
+    sources: ['tripleseat_event', 'tripleseat_lead'],
+  },
+];
+
 // ── Helpers ───────────────────────────────────────────────────────
 
-// Derives label from the dates array returned by the API.
-// This ensures the header always matches the grid exactly,
-// since the API normalizes weeks to Monday.
 function formatDateLabel(dates: string[], mode: CalendarViewMode): string {
   if (dates.length === 0) return '';
 
@@ -80,16 +113,26 @@ export function CalendarShell({
   const [dates, setDates] = useState<string[]>(initialDates);
   const [isPending, startTransition] = useTransition();
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+
+  // Close slide-over when source filter changes to prevent ghost panel
+  useEffect(() => {
+    setSelectedEvent(null);
+  }, [sourceFilter]);
+
+  const filteredEvents = useMemo(() => {
+    if (sourceFilter === 'all') return events;
+    const config = SOURCE_FILTERS.find(f => f.value === sourceFilter);
+    if (!config) return events;
+    return events.filter(e => config.sources.includes(e.source));
+  }, [events, sourceFilter]);
 
   const fetchCalendarData = useCallback(async (date: string, mode: CalendarViewMode) => {
     try {
-      const res = await fetch(
-        `/api/calendar?date=${date}&mode=${mode}&location=ORL`
-      );
+      const res = await fetch(`/api/calendar?date=${date}&mode=${mode}&location=ORL`);
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
 
-      // startTransition wraps only state updates — fetch runs normally above
       startTransition(() => {
         setCourtMappings(data.courtMappings);
         setEvents(data.events);
@@ -122,11 +165,11 @@ export function CalendarShell({
   return (
     <div className="flex flex-col h-full min-h-0">
 
-      {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-(--border-light) shrink-0">
+      {/* ── Toolbar: 3-zone layout ── */}
+      <div className="flex items-center px-6 py-3 border-b border-(--border-light) shrink-0">
 
-        {/* Left: navigation */}
-        <div className="flex items-center gap-2">
+        {/* Zone 1 — Left: navigation + date */}
+        <div className="flex items-center gap-2 flex-1">
           <button
             onClick={() => handleNavigate(-1)}
             disabled={isPending}
@@ -163,22 +206,41 @@ export function CalendarShell({
             <RefreshCw size={15} className={isPending ? 'animate-spin' : ''} />
           </button>
 
-          <h2 className="ml-2 text-base font-semibold text-(--text-primary)">
+          <h2 className="ml-1 text-base font-semibold text-(--text-primary) whitespace-nowrap">
             {formatDateLabel(dates, viewMode)}
           </h2>
 
           {isPending && (
-            <div className="w-4 h-4 border-2 border-(--text-secondary) border-t-transparent rounded-full animate-spin ml-2" />
+            <div className="w-4 h-4 border-2 border-(--text-secondary) border-t-transparent rounded-full animate-spin ml-1" />
           )}
         </div>
 
-        {/* Right: view mode toggles */}
+        {/* Zone 2 — Center: source filter */}
         <div className="flex items-center gap-1 bg-(--bg-secondary) rounded-lg p-1">
+          {SOURCE_FILTERS.map(({ value, label, icon: Icon, title }) => (
+            <button
+              key={value}
+              onClick={() => setSourceFilter(value)}
+              title={title}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                sourceFilter === value
+                  ? 'bg-(--bg-primary) text-(--text-primary) shadow-sm border border-(--color-secondary)'
+                  : 'text-(--text-secondary) hover:text-(--text-primary)'
+              }`}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Zone 3 — Right: view mode toggles */}
+        <div className="flex items-center gap-1 bg-(--bg-secondary) rounded-lg p-1 flex-1 justify-end">
           <button
             onClick={() => handleViewMode('day')}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
               viewMode === 'day'
-                ? 'bg-(--bg-primary) text-(--text-primary) shadow-sm border border-(--border-light)'
+                ? 'bg-(--bg-primary) text-(--text-primary) shadow-sm border border-(--color-secondary)'
                 : 'text-(--text-secondary) hover:text-(--text-primary)'
             }`}
           >
@@ -189,7 +251,7 @@ export function CalendarShell({
             onClick={() => handleViewMode('week')}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
               viewMode === 'week'
-                ? 'bg-(--bg-primary) text-(--text-primary) shadow-sm border border-(--border-light)'
+                ? 'bg-(--bg-primary) text-(--text-primary) shadow-sm border border-(--color-secondary)'
                 : 'text-(--text-secondary) hover:text-(--text-primary)'
             }`}
           >
@@ -200,7 +262,7 @@ export function CalendarShell({
             onClick={() => handleViewMode('agenda')}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
               viewMode === 'agenda'
-                ? 'bg-(--bg-primary) text-(--text-primary) shadow-sm border border-(--border-light)'
+                ? 'bg-(--bg-primary) text-(--text-primary) shadow-sm border border-(--color-secondary)'
                 : 'text-(--text-secondary) hover:text-(--text-primary)'
             }`}
           >
@@ -216,18 +278,19 @@ export function CalendarShell({
           <ResourceCalendar
             dates={dates}
             courtMappings={courtMappings}
-            events={events}
+            events={filteredEvents}
             onEventClick={(event) => setSelectedEvent(event)}
           />
         ) : (
           <AgendaView
             dates={dates}
             courtMappings={courtMappings}
-            events={events}
+            events={filteredEvents}
             onEventClick={(event) => setSelectedEvent(event)}
           />
         )}
       </div>
+
       <EventSlideOver
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}
