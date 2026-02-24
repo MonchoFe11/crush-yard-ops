@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   CalendarDays,
   AlertTriangle,
@@ -13,16 +14,32 @@ import {
 } from "lucide-react";
 import { useSidebar } from "./SidebarContext";
 
-const NAV_ITEMS = [
-  { label: "Calendar",  href: "/calendar",  icon: CalendarDays  },
-  { label: "Conflicts", href: "/conflicts", icon: AlertTriangle },
-  { label: "Staff",     href: "/staff",     icon: Users         },
-  { label: "Settings",  href: "/settings",  icon: Settings      },
-];
-
 export default function Sidebar() {
   const { collapsed, toggle } = useSidebar();
   const pathname = usePathname();
+  const [conflictCount, setConflictCount] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchConflicts = () => {
+      fetch('/api/conflicts?days=14&location=ORL')
+        .then(r => r.ok ? r.json() : null)
+        .then((data: { totalConflicts?: number } | null) => {
+          if (data?.totalConflicts) setConflictCount(data.totalConflicts);
+        })
+        .catch(() => {});
+    };
+
+    fetchConflicts();
+    const interval = setInterval(fetchConflicts, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const NAV_ITEMS = [
+    { label: "Calendar",  href: "/calendar",  icon: CalendarDays,  badge: null },
+    { label: "Conflicts", href: "/conflicts", icon: AlertTriangle, badge: conflictCount > 0 ? conflictCount : null },
+    { label: "Staff",     href: "/staff",     icon: Users,         badge: null },
+    { label: "Settings",  href: "/settings",  icon: Settings,      badge: null },
+  ];
 
   return (
     <aside
@@ -74,7 +91,7 @@ export default function Sidebar() {
         aria-label="Main navigation"
         className="flex flex-col flex-1 overflow-y-auto px-2 py-3"
       >
-        {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
+        {NAV_ITEMS.map(({ label, href, icon: Icon, badge }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
@@ -91,7 +108,17 @@ export default function Sidebar() {
                   : "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary) border-transparent",
               ].join(" ")}
             >
-              <Icon size={17} className="shrink-0" />
+              <div className="relative shrink-0">
+                <Icon size={17} />
+                {badge !== null && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white"
+                    style={{ backgroundColor: 'var(--color-error)' }}
+                  >
+                    {badge > 9 ? '9+' : badge}
+                  </span>
+                )}
+              </div>
               {!collapsed && <span className="truncate">{label}</span>}
             </Link>
           );

@@ -4,6 +4,7 @@
 
 import { getEventClasses, getGridEventClasses } from '@/lib/utils/event-style';
 import { useMemo, useRef, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ChevronDown, ChevronUp, Info } from 'lucide-react';
 import type { CalendarEvent, CourtMapping } from '@/lib/types/calendar';
 
@@ -120,12 +121,15 @@ function EventsPipelinePanel({
         </span>
 
         {conflictCount > 0 && (
-          <span
-            className="text-xs font-semibold font-mono"
+          <Link
+            href="/conflicts"
+            title="View all conflicts"
+            onClick={e => e.stopPropagation()}
+            className="text-xs font-semibold font-mono hover:underline cursor-pointer"
             style={{ color: 'var(--color-error)' }}
           >
             · {conflictCount} conflict{conflictCount !== 1 ? 's' : ''}
-          </span>
+          </Link>
         )}
 
         <div

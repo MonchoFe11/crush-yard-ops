@@ -7,6 +7,7 @@
 //              Each day section has a collapse toggle for density control.
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { CalendarEvent, CourtMapping } from '@/lib/types/calendar';
 import { Clock, MapPin, User, Users, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatDuration } from '@/lib/utils/format';
@@ -167,13 +168,16 @@ function AgendaEventRow({
               {event.title}
             </p>
             {event.hasConflict && (
-              <span
-                className="flex items-center gap-1 text-xs font-medium"
+              <Link
+                href="/conflicts"
+                onClick={e => e.stopPropagation()}
+                title="View all conflicts"
+                className="flex items-center gap-1 text-xs font-medium hover:underline cursor-pointer"
                 style={{ color: 'var(--color-error)' }}
               >
                 <AlertTriangle size={11} />
                 Conflict
-              </span>
+              </Link>
             )}
           </div>
 
@@ -314,13 +318,16 @@ function DaySection({
             {events.length} events
           </span>
           {conflictCount > 0 && (
-            <span
-              className="flex items-center gap-1 text-xs font-medium"
+            <Link
+              href="/conflicts"
+              onClick={e => e.stopPropagation()}
+              title="View all conflicts"
+              className="flex items-center gap-1 text-xs font-medium hover:underline cursor-pointer"
               style={{ color: 'var(--color-error)' }}
             >
               <AlertTriangle size={11} />
               {conflictCount} {conflictCount === 1 ? 'conflict' : 'conflicts'}
-            </span>
+            </Link>
           )}
         </div>
       </button>
@@ -400,13 +407,15 @@ export function AgendaView({
               </span>
             )}
             {totalConflicts > 0 && (
-              <span
-                className="flex items-center gap-1 text-xs font-medium"
+              <Link
+                href="/conflicts"
+                title="View all conflicts"
+                className="flex items-center gap-1 text-xs font-medium hover:underline cursor-pointer"
                 style={{ color: 'var(--color-error)' }}
               >
                 <AlertTriangle size={12} />
                 {totalConflicts} conflicts
-              </span>
+              </Link>
             )}
           </div>
         </div>
@@ -459,13 +468,15 @@ export function AgendaView({
             {activeCourtIds.size} courts active
           </span>
           {events.some(e => e.hasConflict) && (
-            <span
-              className="flex items-center gap-1 text-xs font-medium"
+            <Link
+              href="/conflicts"
+              title="View all conflicts"
+              className="flex items-center gap-1 text-xs font-medium hover:underline cursor-pointer"
               style={{ color: 'var(--color-error)' }}
             >
               <AlertTriangle size={12} />
               {events.filter(e => e.hasConflict).length} conflicts
-            </span>
+            </Link>
           )}
         </div>
       </div>

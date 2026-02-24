@@ -9,7 +9,7 @@ import { EventSlideOver } from '@/components/calendar/EventSlideOver';
 import { AgendaView } from '@/components/calendar/AgendaView';
 import { ResourceCalendar } from '@/components/calendar/ResourceCalendar';
 import { useState, useCallback, useTransition } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, LayoutList, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, LayoutList, CalendarDays, RefreshCw } from 'lucide-react';
 import type {
   CalendarEvent,
   CalendarViewMode,
@@ -151,6 +151,16 @@ export function CalendarShell({
             className="px-3 py-1.5 text-sm rounded hover:bg-(--bg-secondary) text-(--text-secondary) hover:text-(--text-primary) transition-colors disabled:opacity-40"
           >
             Today
+          </button>
+
+          <button
+            onClick={() => fetchCalendarData(currentDate, viewMode)}
+            disabled={isPending}
+            title="Refresh calendar data"
+            className="p-1.5 rounded hover:bg-(--bg-secondary) text-(--text-secondary) hover:text-(--text-primary) transition-colors disabled:opacity-40"
+            aria-label="Refresh"
+          >
+            <RefreshCw size={15} className={isPending ? 'animate-spin' : ''} />
           </button>
 
           <h2 className="ml-2 text-base font-semibold text-(--text-primary)">
