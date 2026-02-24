@@ -15,6 +15,7 @@ import type {
   TSEvent,
   TSLead,
 } from '@/lib/types/calendar';
+export const dynamic = 'force-dynamic';
 
 // ── Location config ───────────────────────────────────────────────
 
