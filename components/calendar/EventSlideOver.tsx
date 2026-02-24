@@ -4,10 +4,11 @@
 // Slide-over panel triggered when staff clicks an event block.
 // Uses slide-over-enter animation and panel-open scroll lock from globals.css.
 
-import { useEffect } from 'react';
-import { X, Clock, User, Users, MapPin, Tag, AlertTriangle, CalendarDays } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, Clock, User, Users, MapPin, Tag, AlertTriangle, CalendarDays, Sparkles } from 'lucide-react';
 import type { CalendarEvent } from '@/lib/types/calendar';
 import { formatDuration } from '@/lib/utils/format';
+import { AIBriefTab } from '@/components/calendar/AIBriefTab';
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -15,6 +16,8 @@ interface EventSlideOverProps {
   event: CalendarEvent | null;
   onClose: () => void;
 }
+
+type SlideOverTab = 'details' | 'brief';
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -46,7 +49,6 @@ function statusLabel(event: CalendarEvent): string {
   }
 }
 
-// Uses badge classes defined in globals.css
 function statusBadgeClass(event: CalendarEvent): string {
   switch (event.status) {
     case 'confirmed': return 'badge-definite';
@@ -54,6 +56,10 @@ function statusBadgeClass(event: CalendarEvent): string {
     case 'prospect':  return 'badge-prospect';
     case 'cancelled': return 'badge-prospect opacity-50';
   }
+}
+
+function isTripleseat(event: CalendarEvent): boolean {
+  return event.source === 'tripleseat_event' || event.source === 'tripleseat_lead';
 }
 
 // ── Detail row ────────────────────────────────────────────────────
@@ -84,6 +90,17 @@ function DetailRow({
 // ── Component ─────────────────────────────────────────────────────
 
 export function EventSlideOver({ event, onClose }: EventSlideOverProps) {
+  const [tabState, setTabState] = useState<{ tab: SlideOverTab; eventId: string | null }>({
+    tab: 'details',
+    eventId: null,
+  });
+  
+  const activeTab = tabState.eventId === (event?.id ?? null) ? tabState.tab : 'details';
+  
+  const setActiveTab = (tab: SlideOverTab) => {
+    setTabState({ tab, eventId: event?.id ?? null });
+  };
+
   // Close on Escape key
   useEffect(() => {
     if (!event) return;
@@ -111,6 +128,8 @@ export function EventSlideOver({ event, onClose }: EventSlideOverProps) {
     : event.courtMappingIds.length > 1
     ? `${event.courtMappingIds.length} courts`
     : 'Unassigned';
+
+  const showBriefTab = isTripleseat(event);
 
   return (
     <>
@@ -140,7 +159,8 @@ export function EventSlideOver({ event, onClose }: EventSlideOverProps) {
                 {sourceLabel(event)}
               </span>
               {event.hasConflict && (
-                <span className="flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded border"
+                <span
+                  className="flex items-center gap-1 text-xs font-bold px-1.5 py-0.5 rounded border"
                   style={{
                     color: 'var(--color-error)',
                     borderColor: 'var(--color-error)',
@@ -173,69 +193,91 @@ export function EventSlideOver({ event, onClose }: EventSlideOverProps) {
           </button>
         </div>
 
+        {/* ── Tabs (Tripleseat only) ── */}
+        {showBriefTab && (
+          <div className="flex border-b border-(--border-light) shrink-0 bg-(--bg-primary) px-5">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`flex items-center gap-1.5 py-2.5 text-sm font-medium border-b-2 mr-5 transition-colors ${
+                activeTab === 'details'
+                  ? 'border-(--color-secondary) text-(--text-primary)'
+                  : 'border-transparent text-(--text-muted) hover:text-(--text-secondary)'
+              }`}
+            >
+              Details
+            </button>
+            <button
+              onClick={() => setActiveTab('brief')}
+              className={`flex items-center gap-1.5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'brief'
+                  ? 'border-(--color-secondary) text-(--text-primary)'
+                  : 'border-transparent text-(--text-muted) hover:text-(--text-secondary)'
+              }`}
+            >
+              <Sparkles size={13} />
+              AI Brief
+            </button>
+          </div>
+        )}
+
         {/* ── Body ── */}
         <div className="flex-1 overflow-y-auto px-5 py-2">
-
-          <DetailRow
-            icon={<Clock size={15} />}
-            label="Time"
-            value={`${event.startTime} – ${event.endTime} (${formatDuration(event.durationMinutes)})`}
-          />
-
-          <DetailRow
-            icon={<CalendarDays size={15} />}
-            label="Date"
-            value={formatDate(event.date)}
-          />
-
-          <DetailRow
-            icon={<MapPin size={15} />}
-            label="Court"
-            value={courtLabel}
-          />
-
-          <DetailRow
-            icon={<User size={15} />}
-            label="Member"
-            value={event.memberName ?? undefined}
-          />
-
-          <DetailRow
-            icon={<Tag size={15} />}
-            label="Member Email"
-            value={event.memberEmail ?? undefined}
-          />
-
-          <DetailRow
-            icon={<User size={15} />}
-            label="Instructor"
-            value={event.instructorName ?? undefined}
-          />
-
-          <DetailRow
-            icon={<User size={15} />}
-            label="Contact"
-            value={event.contactName ?? undefined}
-          />
-
-          <DetailRow
-            icon={<Tag size={15} />}
-            label="Contact Email"
-            value={event.contactEmail ?? undefined}
-          />
-
-          <DetailRow
-            icon={<Users size={15} />}
-            label="Guest Count"
-            value={event.guestCount ? `${event.guestCount} guests` : undefined}
-          />
-
-          <DetailRow
-            icon={<Tag size={15} />}
-            label="Event Type"
-            value={event.eventType ?? undefined}
-          />
-
+          {activeTab === 'details' || !showBriefTab ? (
+            <>
+              <DetailRow
+                icon={<Clock size={15} />}
+                label="Time"
+                value={`${event.startTime} – ${event.endTime} (${formatDuration(event.durationMinutes)})`}
+              />
+              <DetailRow
+                icon={<CalendarDays size={15} />}
+                label="Date"
+                value={formatDate(event.date)}
+              />
+              <DetailRow
+                icon={<MapPin size={15} />}
+                label="Court"
+                value={courtLabel}
+              />
+              <DetailRow
+                icon={<User size={15} />}
+                label="Member"
+                value={event.memberName ?? undefined}
+              />
+              <DetailRow
+                icon={<Tag size={15} />}
+                label="Member Email"
+                value={event.memberEmail ?? undefined}
+              />
+              <DetailRow
+                icon={<User size={15} />}
+                label="Instructor"
+                value={event.instructorName ?? undefined}
+              />
+              <DetailRow
+                icon={<User size={15} />}
+                label="Contact"
+                value={event.contactName ?? undefined}
+              />
+              <DetailRow
+                icon={<Tag size={15} />}
+                label="Contact Email"
+                value={event.contactEmail ?? undefined}
+              />
+              <DetailRow
+                icon={<Users size={15} />}
+                label="Guest Count"
+                value={event.guestCount ? `${event.guestCount} guests` : undefined}
+              />
+              <DetailRow
+                icon={<Tag size={15} />}
+                label="Event Type"
+                value={event.eventType ?? undefined}
+              />
+            </>
+          ) : (
+            <AIBriefTab key={event.id} event={event} />
+          )}
         </div>
 
         {/* ── Footer ── */}
